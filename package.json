@@ -1,0 +1,101 @@
+{
+  "name": "relatedsources",
+  "displayName": "Related Sources",
+  "description": "Quickly toggle between related source files in your project.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/david-risney/RelatedSources"
+  },
+  "version": "1.0.0",
+  "icon": "src/logo-128.png",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "relatedsources.next",
+        "title": "Related Sources: Next Related File",
+        "category": "Related Sources"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "relatedsources.next",
+        "key": "f4",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Related Sources",
+      "properties": {
+        "relatedsources.matchers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sourceRegexp": {
+                "type": "string",
+                "description": "Regular expression pattern to match against the source path."
+              },
+              "targetPath": {
+                "type": "string",
+                "description": "Path to related file with optional capture groups."
+              },
+              "name": {
+                "type": "string",
+                "description": "Name of the relationship of related files. Does not need to be unique."
+              }
+            },
+            "required": ["sourceRegexp", "targetPath", "name"]
+          },
+          "default": [
+            {
+              "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
+              "targetPath": "${path}.*",
+              "name": "Same filename"
+            },
+            {
+              "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
+              "targetPath": "out/*/gen/${path}.*",
+              "name": "Generated files"
+            },
+            {
+              "sourceRegexp": "^out/*/gen/(?<path>.*)\\.[^.]*$",
+              "targetPath": "${path}.*",
+              "name": "Generated files"
+            }
+          ],
+          "description": "Related source file patterns"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test ./test/unit/**/*.test.js",
+    "package": "npx vsce package",
+    "install-local": "code --install-extension relatedsources-0.0.1.vsix",
+    "package-and-install": "npm run package && npm run install-local"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "homepage": "https://github.com/david-risney/RelatedSources#readme",
+  "bugs": {
+    "url": "https://github.com/david-risney/RelatedSources/issues"
+  },
+  "keywords": [
+    "related",
+    "sources",
+    "files",
+    "navigation"
+  ],
+  "publisher": "DavidRisney"
+}
