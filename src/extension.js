@@ -82,9 +82,32 @@ function deactivate() {
 
 class RelatedSources {
     constructor() {
+        // Cache for compiled regexes keyed by pattern string
+        this.regexCache = new Map();
     }
 
     stop() {
+        this.regexCache.clear();
+    }
+
+    /**
+     * Get a compiled regex from cache, or compile and cache it.
+     * @param {string} pattern - The regex pattern string
+     * @returns {RegExp|null} - The compiled regex, or null if invalid
+     */
+    getCompiledRegex(pattern) {
+        if (this.regexCache.has(pattern)) {
+            return this.regexCache.get(pattern);
+        }
+        try {
+            const regex = new RegExp(pattern);
+            this.regexCache.set(pattern, regex);
+            return regex;
+        } catch (e) {
+            console.error('[RelatedSources] invalid regex pattern:', pattern, e);
+            this.regexCache.set(pattern, null);
+            return null;
+        }
     }
 
     async getPrevNextInfoHelper() {
@@ -116,7 +139,10 @@ class RelatedSources {
                 continue;
             }
             try {
-                const regex = new RegExp(matcher.sourceRegexp);
+                const regex = this.getCompiledRegex(matcher.sourceRegexp);
+                if (!regex) {
+                    continue;
+                }
                 const m = relPath.match(regex);
                 if (!m) {
                     continue;
