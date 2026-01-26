@@ -1,5 +1,4 @@
 const vscode = require('vscode');
-const fs = require('fs');
 const path = require('path');
 let relatedSources = null;
 
@@ -27,16 +26,50 @@ function activate(context) {
         }
     });
 
-    context.subscriptions.push(nextCmd);
+    const prevCmd = vscode.commands.registerCommand('relatedsources.prev', async () => {
+        if (!relatedSources) {
+            log('RelatedSources not initialized');
+            return;
+        }
 
-    // Watch for configuration changes
-    const configChangeWatcher = vscode.workspace.onDidChangeConfiguration(event => {
-        if (event.affectsConfiguration('relatedsources')) {
-            relatedSources.onConfigurationChanged();
+        try {
+            await relatedSources.prev();
+        } catch (err) {
+            console.error('[RelatedSources] prev failed', err);
+            vscode.window.showErrorMessage('RelatedSources: prev failed');
         }
     });
 
-    context.subscriptions.push(configChangeWatcher);
+    const showRelatedCmd = vscode.commands.registerCommand('relatedsources.showRelated', async () => {
+        // Get the list of related files
+        if (!relatedSources) {
+            log('RelatedSources not initialized');
+            return;
+        }
+        const info = await relatedSources.getPrevNextInfoHelper();
+        // Show quick pick
+        const items = info.all.list.map((relPath, idx) => {
+            return {
+                label: path.basename(relPath),
+                description: relPath,
+                index: idx
+            };
+        });
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a related file to open',
+            canPickMany: false
+        });
+        if (selected) {
+            const selectedUri = await vscode.workspace.findFiles(new vscode.RelativePattern(vscode.workspace.workspaceFolders[0], selected.description), null, 1);
+            if (selectedUri && selectedUri.length > 0) {
+                await relatedSources.completePrevNextHelper(selectedUri[0]);
+            }
+        }
+    });
+
+    context.subscriptions.push(nextCmd);
+    context.subscriptions.push(prevCmd);
+    context.subscriptions.push(showRelatedCmd);
 }
 
 function deactivate() {
@@ -51,13 +84,10 @@ class RelatedSources {
     constructor() {
     }
 
-    onConfigurationChanged() {
-    }
-
     stop() {
     }
 
-    async next() {
+    async getPrevNextInfoHelper() {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showInformationMessage('Related Sources: No active editor');
@@ -119,12 +149,17 @@ class RelatedSources {
         // include current file
         candidateUris.push(fileUri);
 
+        function fullPathToRelative(fullPath) {
+            return path.relative(workspaceRoot, fullPath).replace(/\\/g, '/');
+        }
+
         // deduplicate by relative path
+        // map maps from workspace relative paths to file URI
         const map = new Map();
-        for (const u of candidateUris) {
-            const p = path.relative(workspaceRoot, u.fsPath).replace(/\\/g, '/');
-            if (!map.has(p)) {
-                map.set(p, u);
+        for (const candidateUri of candidateUris) {
+            const fullPath = fullPathToRelative(candidateUri.fsPath);
+            if (!map.has(fullPath)) {
+                map.set(fullPath, candidateUri);
             }
         }
 
@@ -134,25 +169,94 @@ class RelatedSources {
             return;
         }
 
-        const currentKey = path.relative(workspaceRoot, fileUri.fsPath).replace(/\\/g, '/');
+        const currentKey = fullPathToRelative(fileUri.fsPath);
         let idx = list.indexOf(currentKey);
         if (idx === -1) {
             idx = 0;
+            log(`Cant find current path (${currentKey}) in list ${JSON.stringify(list)}`)
         }
-        const nextIndex = (idx + 1) % list.length;
+        const nextIndex = ((idx + 1) % (list.length));
         const nextUri = map.get(list[nextIndex]);
-        if (!nextUri) {
-            vscode.window.showInformationMessage('Related Sources: Next file not found');
-            return;
+
+        let prevIndex = idx - 1;
+        if (prevIndex < 0) {
+            prevIndex = list.length - 1;
+        }
+        const prevUri = map.get(list[prevIndex]);
+
+        return {
+            all: {
+                list,
+                currentIdx: idx
+            },
+            next: {
+                index: nextIndex,
+                uri: nextUri
+            },
+            prev: {
+                index: prevIndex,
+                uri: prevUri
+            }
+        };
+    }
+
+    async completePrevNextHelper(uri) {
+        const maxColumn = vscode.window.visibleTextEditors.reduce((max, editor) => Math.max(max, editor.viewColumn), 1);
+        const currentColumn = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : 1;
+        const openColumnSetting = vscode.workspace.getConfiguration('relatedsources').get('openColumn', 'beside');
+
+        let newColumn = currentColumn;
+        switch (openColumnSetting) {
+        case 'current':
+            newColumn = currentColumn;
+            break;
+
+        case 'beside':
+            newColumn = currentColumn + 1;
+            break;
+
+        default:
+        case 'besideNoNewColumn':
+            if (currentColumn < maxColumn) {
+                newColumn = currentColumn + 1;
+            } else if (currentColumn > 1) {
+                newColumn = currentColumn - 1;
+            }
+            break;
         }
 
         try {
-            const docToOpen = await vscode.workspace.openTextDocument(nextUri);
-            await vscode.window.showTextDocument(docToOpen, { preview: false });
+            const docToOpen = await vscode.workspace.openTextDocument(uri);
+            await vscode.window.showTextDocument(docToOpen, { 
+                preview: false,
+                viewColumn: newColumn
+            });
         } catch (e) {
             console.error('[RelatedSources] failed to open file', e);
             vscode.window.showErrorMessage('Related Sources: Failed to open related file');
         }
+    }
+
+    async next() {
+        const info = await this.getPrevNextInfoHelper();
+
+        if (!info.next.uri) {
+            vscode.window.showInformationMessage('Related Sources: Next file not found');
+            return;
+        }
+
+        await this.completePrevNextHelper(info.next.uri);
+    }
+
+    async prev() {
+        const info = await this.getPrevNextInfoHelper();
+
+        if (!info.prev.uri) {
+            vscode.window.showInformationMessage('Related Sources: Previous file not found');
+            return;
+        }
+
+        await this.completePrevNextHelper(info.prev.uri);
     }
 }
 

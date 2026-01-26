@@ -24,12 +24,32 @@
         "command": "relatedsources.next",
         "title": "Related Sources: Next Related File",
         "category": "Related Sources"
+      },
+      {
+        "command": "relatedsources.prev",
+        "title": "Related Sources: Previous Related File",
+        "category": "Related Sources"
+      },
+      {
+        "command": "relatedsources.showRelated",
+        "title": "Related Sources: Show Related Files",
+        "category": "Related Sources"
       }
     ],
     "keybindings": [
       {
         "command": "relatedsources.next",
         "key": "f4",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "relatedsources.prev",
+        "key": "shift+f4",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "relatedsources.showRelated",
+        "key": "ctrl+shift+r",
         "when": "editorTextFocus"
       }
     ],
@@ -63,17 +83,32 @@
               "name": "Same filename"
             },
             {
-              "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
-              "targetPath": "out/*/gen/${path}.*",
-              "name": "Generated files"
-            },
-            {
-              "sourceRegexp": "^out/*/gen/(?<path>.*)\\.[^.]*$",
+              "sourceRegexp": "^out/[^\\/]+/gen/(?<path>.*)\\.[^.]*$",
               "targetPath": "${path}.*",
               "name": "Generated files"
             }
           ],
           "description": "Related source file patterns"
+        },
+        "relatedsources.openColumn": {
+          "type": "string",
+          "enum": [
+            "current",
+            "beside",
+            "besideNoNewColumn"
+          ],
+          "default": "besideNoNewColumn",
+          "description": "Column in which to open related documents",
+          "enumDescriptions": [
+            "Open in the *current* column as the source document",
+            "Open *beside* the current column",
+            "Open *beside* the current column but never creating a new column"
+          ],
+          "enumItemLabels": [
+            "Current Column",
+            "Beside Current Column",
+            "Beside Current Column (No New Column)"
+          ]
         }
       }
     }
