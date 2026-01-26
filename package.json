@@ -116,7 +116,7 @@
   "scripts": {
     "test": "node --test ./test/unit/**/*.test.js",
     "package": "npx vsce package",
-    "install-local": "code --install-extension relatedsources-0.0.1.vsix",
+    "install-local": "code --install-extension relatedsources-1.0.0.vsix",
     "package-and-install": "npm run package && npm run install-local"
   },
   "devDependencies": {
