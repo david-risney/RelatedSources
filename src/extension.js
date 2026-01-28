@@ -135,18 +135,27 @@ class RelatedSources {
         let candidateUris = [];
 
         for (const matcher of matchers) {
+            const matcherStartTime = Date.now();
+            const matcherName = matcher?.name || 'unnamed';
+            log(`Processing matcher "${matcherName}": sourceRegexp=${matcher?.sourceRegexp}, targetPath=${matcher?.targetPath}`);
+
             if (!matcher || !matcher.sourceRegexp || !matcher.targetPath) {
+                log(`Skipping matcher "${matcherName}": missing required fields`);
                 continue;
             }
             try {
                 const regex = this.getCompiledRegex(matcher.sourceRegexp);
                 if (!regex) {
+                    log(`Skipping matcher "${matcherName}": invalid regex`);
                     continue;
                 }
                 const m = relPath.match(regex);
                 if (!m) {
+                    log(`Matcher "${matcherName}": no match for path "${relPath}"`);
                     continue;
                 }
+
+                log(`Matcher "${matcherName}": matched path "${relPath}"`);
 
                 let target = matcher.targetPath;
                 // Replace placeholders ${name} and ${1}
@@ -162,13 +171,27 @@ class RelatedSources {
                 // Normalize target to forward slashes and remove leading slash
                 target = target.replace(/\\/g, '/').replace(/^[\/]+/, '');
 
+                log(`Matcher "${matcherName}": searching for files matching "${target}"`);
+                const findFilesStartTime = Date.now();
                 const found = await vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, target));
+                const findFilesDuration = Date.now() - findFilesStartTime;
+                log(`Matcher "${matcherName}": findFiles took ${findFilesDuration}ms, found ${found.length} files`);
+
                 for (const f of found) {
                     candidateUris.push(f);
                 }
             } catch (e) {
                 console.error('[RelatedSources] invalid matcher', e);
                 continue;
+            }
+
+            const matcherDuration = Date.now() - matcherStartTime;
+            log(`Matcher "${matcherName}": completed in ${matcherDuration}ms`);
+            if (matcherDuration > 1000) {
+                vscode.window.showWarningMessage(
+                    `Related Sources: Matcher "${matcherName}" took ${(matcherDuration / 1000).toFixed(1)}s. ` +
+                    `Consider optimizing: sourceRegexp="${matcher.sourceRegexp}", targetPath="${matcher.targetPath}"`
+                );
             }
         }
 
