@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const path = require('path');
+const { findFilesWithGlob } = require('./findFilesWithGlob');
 let relatedSources = null;
 
 const log = (...args) => {
@@ -60,7 +61,7 @@ function activate(context) {
             canPickMany: false
         });
         if (selected) {
-            const selectedUri = await vscode.workspace.findFiles(new vscode.RelativePattern(vscode.workspace.workspaceFolders[0], selected.description), null, 1);
+            const selectedUri = await findFilesWithGlob(vscode.workspace.workspaceFolders[0], selected.description, 1);
             if (selectedUri && selectedUri.length > 0) {
                 await relatedSources.completePrevNextHelper(selectedUri[0]);
             }
@@ -174,9 +175,9 @@ class RelatedSources {
 
                 log(`Matcher "${matcherName}": searching for files matching "${target}"`);
                 const findFilesStartTime = Date.now();
-                const found = await vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, target));
+                const found = await findFilesWithGlob(workspaceFolder, target);
                 findFilesDuration = Date.now() - findFilesStartTime;
-                log(`Matcher "${matcherName}": findFiles took ${findFilesDuration}ms, found ${found.length} files`);
+                log(`Matcher "${matcherName}": findFilesWithGlob took ${findFilesDuration}ms, found ${found.length} files`);
 
                 for (const f of found) {
                     candidateUris.push(f);

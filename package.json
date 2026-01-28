@@ -85,7 +85,12 @@
             {
               "sourceRegexp": "^out/[^\\/]+/gen/(?<path>.*)\\.[^.]*$",
               "targetPath": "${path}.*",
-              "name": "Generated files"
+              "name": "Generated source files"
+            },
+            {
+              "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
+              "targetPath": "out/*/gen/${path}.*",
+              "name": "Generated target files"
             }
           ],
           "description": "Related source file patterns"
