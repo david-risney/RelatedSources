@@ -143,6 +143,8 @@ class RelatedSources {
                 log(`Skipping matcher "${matcherName}": missing required fields`);
                 continue;
             }
+            let target = matcher.targetPath;
+            let findFilesDuration = 0;
             try {
                 const regex = this.getCompiledRegex(matcher.sourceRegexp);
                 if (!regex) {
@@ -157,7 +159,6 @@ class RelatedSources {
 
                 log(`Matcher "${matcherName}": matched path "${relPath}"`);
 
-                let target = matcher.targetPath;
                 // Replace placeholders ${name} and ${1}
                 target = target.replace(/\$\{([^}]+)\}/g, (full, name) => {
                     if (/^\d+$/.test(name)) {
@@ -174,7 +175,7 @@ class RelatedSources {
                 log(`Matcher "${matcherName}": searching for files matching "${target}"`);
                 const findFilesStartTime = Date.now();
                 const found = await vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, target));
-                const findFilesDuration = Date.now() - findFilesStartTime;
+                findFilesDuration = Date.now() - findFilesStartTime;
                 log(`Matcher "${matcherName}": findFiles took ${findFilesDuration}ms, found ${found.length} files`);
 
                 for (const f of found) {
@@ -189,8 +190,9 @@ class RelatedSources {
             log(`Matcher "${matcherName}": completed in ${matcherDuration}ms`);
             if (matcherDuration > 1000) {
                 vscode.window.showWarningMessage(
-                    `Related Sources: Matcher "${matcherName}" took ${(matcherDuration / 1000).toFixed(1)}s. ` +
-                    `Consider optimizing: sourceRegexp="${matcher.sourceRegexp}", targetPath="${matcher.targetPath}"`
+                    `Related Sources: Matcher "${matcherName}" took ${(matcherDuration / 1000).toFixed(1)}s ` +
+                    `and findFiles duration ${(findFilesDuration / 1000).toFixed(1)}s. ` +
+                    `Consider optimizing: sourceRegexp="${matcher.sourceRegexp}", targetPath="${matcher.targetPath}", target="${target}"`
                 );
             }
         }
