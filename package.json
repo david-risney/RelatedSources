@@ -93,7 +93,7 @@
               "name": "Generated target files"
             },
             {
-              "sourceRegexp": "^(?<path>.*)_(base|impl|delegate|observer|proxy)\\.[^.]*$",
+              "sourceRegexp": "^(?<path>.*)_(base|impl|p|i)\\.[^.]*$",
               "targetPath": "${path}.*",
               "name": "Suffix target files"
             },
@@ -106,6 +106,16 @@
               "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
               "targetPath": "${path}_impl.*",
               "name": "Suffix impl source files"
+            },
+            {
+              "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
+              "targetPath": "${path}_p.*",
+              "name": "Suffix midl _p source files"
+            },
+            {
+              "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
+              "targetPath": "${path}_i.*",
+              "name": "Suffix midl _i source files"
             }
           ],
           "description": "Related source file patterns"
@@ -117,7 +127,7 @@
             "beside",
             "besideNoNewColumn"
           ],
-          "default": "besideNoNewColumn",
+          "default": "current",
           "description": "Column in which to open related documents",
           "enumDescriptions": [
             "Open in the *current* column as the source document",

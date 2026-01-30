@@ -99,9 +99,10 @@ function hasWildcard(segment) {
  * @param {string} pattern - The glob pattern (see module documentation for syntax)
  * @param {number} [maxResults] - Optional maximum number of results to return
  * @param {object} [vscodeMock] - Optional vscode module for testing
+ * @param {Map<string, Array>} [directoryCache] - Optional cache for readDirectory results
  * @returns {Promise<vscode.Uri[]>} - Array of URIs matching the pattern
  */
-async function findFilesWithGlob(workspaceFolder, pattern, maxResults, vscodeMock) {
+async function findFilesWithGlob(workspaceFolder, pattern, maxResults, vscodeMock, directoryCache) {
     const vs = vscodeMock || vscode;
     
     if (!workspaceFolder || !pattern) {
@@ -119,7 +120,7 @@ async function findFilesWithGlob(workspaceFolder, pattern, maxResults, vscodeMoc
     const results = [];
     const rootUri = workspaceFolder.uri;
 
-    await searchDirectory(vs, rootUri, segments, 0, results, maxResults);
+    await searchDirectory(vs, rootUri, segments, 0, results, maxResults, directoryCache);
 
     return results;
 }
@@ -133,9 +134,10 @@ async function findFilesWithGlob(workspaceFolder, pattern, maxResults, vscodeMoc
  * @param {number} segmentIndex - Current segment index being matched
  * @param {vscode.Uri[]} results - Accumulator for matching file URIs
  * @param {number} [maxResults] - Optional maximum number of results
+ * @param {Map<string, Array>} [directoryCache] - Optional cache for readDirectory results
  * @returns {Promise<boolean>} - True if max results reached
  */
-async function searchDirectory(vs, currentUri, segments, segmentIndex, results, maxResults) {
+async function searchDirectory(vs, currentUri, segments, segmentIndex, results, maxResults, directoryCache) {
     // Check if we've collected enough results
     if (maxResults !== undefined && results.length >= maxResults) {
         return true;
@@ -152,7 +154,17 @@ async function searchDirectory(vs, currentUri, segments, segmentIndex, results, 
     const segmentRegex = segmentHasWildcard ? segmentToRegex(segment) : null;
 
     try {
-        const entries = await vs.workspace.fs.readDirectory(currentUri);
+        // Use cache if available
+        const cacheKey = currentUri.fsPath;
+        let entries;
+        if (directoryCache && directoryCache.has(cacheKey)) {
+            entries = directoryCache.get(cacheKey);
+        } else {
+            entries = await vs.workspace.fs.readDirectory(currentUri);
+            if (directoryCache) {
+                directoryCache.set(cacheKey, entries);
+            }
+        }
 
         for (const [name, fileType] of entries) {
             // Check if we've collected enough results
@@ -188,7 +200,8 @@ async function searchDirectory(vs, currentUri, segments, segmentIndex, results, 
                         segments,
                         segmentIndex + 1,
                         results,
-                        maxResults
+                        maxResults,
+                        directoryCache
                     );
                     if (maxReached) {
                         return true;

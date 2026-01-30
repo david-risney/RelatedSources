@@ -506,3 +506,133 @@ describe('findFilesWithGlob edge cases', () => {
         assert.deepStrictEqual(paths, ['my files/my document.txt']);
     });
 });
+
+// ============================================================================
+// Directory Cache Tests
+// ============================================================================
+
+describe('findFilesWithGlob directory cache', () => {
+    let tempDir;
+    let findFilesWithGlob;
+
+    beforeEach(() => {
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'findfiles-cache-'));
+        const module = require('../../src/findFilesWithGlob.js');
+        findFilesWithGlob = module.findFilesWithGlob;
+    });
+
+    afterEach(() => {
+        removeDir(tempDir);
+    });
+
+    it('should use cache for repeated directory reads', async () => {
+        // Create test files
+        createTestFiles(tempDir, [
+            'src/file1.js',
+            'src/file2.js',
+            'src/file3.js',
+        ]);
+
+        let readDirectoryCallCount = 0;
+
+        // Create mock vscode that counts readDirectory calls
+        const countingMockVscode = {
+            Uri: MockUri,
+            FileType: MockFileType,
+            workspace: {
+                fs: {
+                    readDirectory: async (uri) => {
+                        readDirectoryCallCount++;
+                        const dirPath = uri.fsPath;
+                        if (!fs.existsSync(dirPath)) {
+                            throw new Error(`ENOENT: ${dirPath}`);
+                        }
+                        const entries = fs.readdirSync(dirPath);
+                        return entries.map(name => {
+                            const fullPath = path.join(dirPath, name);
+                            const stat = fs.statSync(fullPath);
+                            return [name, stat.isFile() ? MockFileType.File : MockFileType.Directory];
+                        });
+                    }
+                }
+            }
+        };
+
+        const workspaceFolder = { uri: MockUri.file(tempDir) };
+        const cache = new Map();
+
+        // First call - should populate cache
+        readDirectoryCallCount = 0;
+        await findFilesWithGlob(workspaceFolder, 'src/*.js', undefined, countingMockVscode, cache);
+        const firstCallCount = readDirectoryCallCount;
+
+        // Second call with same cache - should use cached results
+        readDirectoryCallCount = 0;
+        await findFilesWithGlob(workspaceFolder, 'src/*.js', undefined, countingMockVscode, cache);
+        const secondCallCount = readDirectoryCallCount;
+
+        // First call should have made readDirectory calls
+        assert.ok(firstCallCount > 0, 'First call should make readDirectory calls');
+        // Second call should not make any readDirectory calls (all cached)
+        assert.strictEqual(secondCallCount, 0, 'Second call should use cache and make no readDirectory calls');
+    });
+
+    it('should work without cache (backward compatible)', async () => {
+        createTestFiles(tempDir, [
+            'src/app.js',
+        ]);
+
+        const mockVscode = createMockVscode(tempDir);
+        const workspaceFolder = { uri: mockVscode.Uri.file(tempDir) };
+
+        // Call without cache parameter
+        const results = await findFilesWithGlob(workspaceFolder, 'src/*.js', undefined, mockVscode);
+        assert.strictEqual(results.length, 1);
+    });
+
+    it('should share cache across multiple pattern searches', async () => {
+        createTestFiles(tempDir, [
+            'src/app.js',
+            'src/app.ts',
+            'src/index.js',
+        ]);
+
+        let readDirectoryCallCount = 0;
+
+        const countingMockVscode = {
+            Uri: MockUri,
+            FileType: MockFileType,
+            workspace: {
+                fs: {
+                    readDirectory: async (uri) => {
+                        readDirectoryCallCount++;
+                        const dirPath = uri.fsPath;
+                        if (!fs.existsSync(dirPath)) {
+                            throw new Error(`ENOENT: ${dirPath}`);
+                        }
+                        const entries = fs.readdirSync(dirPath);
+                        return entries.map(name => {
+                            const fullPath = path.join(dirPath, name);
+                            const stat = fs.statSync(fullPath);
+                            return [name, stat.isFile() ? MockFileType.File : MockFileType.Directory];
+                        });
+                    }
+                }
+            }
+        };
+
+        const workspaceFolder = { uri: MockUri.file(tempDir) };
+        const cache = new Map();
+
+        // Search for .js files
+        await findFilesWithGlob(workspaceFolder, 'src/*.js', undefined, countingMockVscode, cache);
+        const callsAfterFirst = readDirectoryCallCount;
+
+        // Search for .ts files - should reuse cached src directory listing
+        await findFilesWithGlob(workspaceFolder, 'src/*.ts', undefined, countingMockVscode, cache);
+        const callsAfterSecond = readDirectoryCallCount;
+
+        // The second search should not add more readDirectory calls for src/
+        assert.strictEqual(callsAfterSecond, callsAfterFirst, 'Second pattern search should reuse cached directory');
+    });
+});

@@ -132,68 +132,9 @@ class RelatedSources {
         }
 
         const workspaceRoot = workspaceFolder.uri.fsPath;
-        const relPath = path.relative(workspaceRoot, fileUri.fsPath).replace(/\\/g, '/');
 
-        const config = vscode.workspace.getConfiguration('relatedsources');
-        const matchers = config.matchers || [];
-
-        let candidateUris = [];
-
-        for (const matcher of matchers) {
-            const matcherStartTime = Date.now();
-            const matcherName = matcher?.name || 'unnamed';
-
-            if (!matcher || !matcher.sourceRegexp || !matcher.targetPath) {
-                continue;
-            }
-            let target = matcher.targetPath;
-            let findFilesDuration = 0;
-            try {
-                const regex = this.getCompiledRegex(matcher.sourceRegexp);
-                if (!regex) {
-                    continue;
-                }
-                const m = relPath.match(regex);
-                if (!m) {
-                    continue;
-                }
-
-                // Replace placeholders ${name} and ${1}
-                target = target.replace(/\$\{([^}]+)\}/g, (full, name) => {
-                    if (/^\d+$/.test(name)) {
-                        const idx = parseInt(name, 10);
-                        return m[idx] || '';
-                    } else {
-                        return (m.groups && m.groups[name]) || '';
-                    }
-                });
-
-                // Normalize target to forward slashes and remove leading slash
-                target = target.replace(/\\/g, '/').replace(/^[\/]+/, '');
-
-                const findFilesStartTime = Date.now();
-                const found = await findFilesWithGlob(workspaceFolder, target);
-                findFilesDuration = Date.now() - findFilesStartTime;
-                log(`Matcher "${matcherName}": findFilesWithGlob took ${findFilesDuration}ms, found ${found.length} files`);
-
-                for (const f of found) {
-                    candidateUris.push(f);
-                }
-            } catch (e) {
-                console.error('[RelatedSources] invalid matcher', e);
-                continue;
-            }
-
-            const matcherDuration = Date.now() - matcherStartTime;
-            log(`Matcher "${matcherName}": completed in ${matcherDuration}ms`);
-            if (matcherDuration > 1000) {
-                vscode.window.showWarningMessage(
-                    `Related Sources: Matcher "${matcherName}" took ${(matcherDuration / 1000).toFixed(1)}s ` +
-                    `and findFiles duration ${(findFilesDuration / 1000).toFixed(1)}s. ` +
-                    `Consider optimizing: sourceRegexp="${matcher.sourceRegexp}", targetPath="${matcher.targetPath}", target="${target}"`
-                );
-            }
-        }
+        // Get related files using the helper
+        const candidateUris = await this.getTransitiveRelatedFiles(fileUri);
 
         // include current file
         candidateUris.push(fileUri);
@@ -249,6 +190,140 @@ class RelatedSources {
         };
     }
 
+    /**
+     * Gets an array of related file URIs for a given file URI.
+     * This applies all configured matchers to find related files.
+     * 
+     * @param {vscode.Uri} fileUri - The file URI to find related files for
+     * @param {Map<string, Array>} [directoryCache] - Optional cache for readDirectory results
+     * @returns {Promise<vscode.Uri[]>} - Array of related file URIs (may contain duplicates)
+     */
+    async getRelatedFiles(fileUri, directoryCache) {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(fileUri) || (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0]);
+        if (!workspaceFolder) {
+            return [];
+        }
+
+        const workspaceRoot = workspaceFolder.uri.fsPath;
+        const relPath = path.relative(workspaceRoot, fileUri.fsPath).replace(/\\/g, '/');
+
+        const config = vscode.workspace.getConfiguration('relatedsources');
+        const matchers = config.matchers || [];
+
+        let candidateUris = [];
+
+        for (const matcher of matchers) {
+            const matcherStartTime = Date.now();
+            const matcherName = matcher?.name || 'unnamed';
+
+            if (!matcher || !matcher.sourceRegexp || !matcher.targetPath) {
+                continue;
+            }
+            let target = matcher.targetPath;
+            let findFilesDuration = 0;
+            try {
+                const regex = this.getCompiledRegex(matcher.sourceRegexp);
+                if (!regex) {
+                    continue;
+                }
+                const m = relPath.match(regex);
+                if (!m) {
+                    continue;
+                }
+
+                // Replace placeholders ${name} and ${1}
+                target = target.replace(/\$\{([^}]+)\}/g, (full, name) => {
+                    if (/^\d+$/.test(name)) {
+                        const idx = parseInt(name, 10);
+                        return m[idx] || '';
+                    } else {
+                        return (m.groups && m.groups[name]) || '';
+                    }
+                });
+
+                // Normalize target to forward slashes and remove leading slash
+                target = target.replace(/\\/g, '/').replace(/^[\/]+/, '');
+
+                const findFilesStartTime = Date.now();
+                const found = await findFilesWithGlob(workspaceFolder, target, undefined, undefined, directoryCache);
+                findFilesDuration = Date.now() - findFilesStartTime;
+                log(`Matcher "${matcherName}": findFilesWithGlob took ${findFilesDuration}ms, found ${found.length} files`);
+
+                for (const f of found) {
+                    candidateUris.push(f);
+                }
+            } catch (e) {
+                console.error('[RelatedSources] invalid matcher', e);
+                continue;
+            }
+
+            const matcherDuration = Date.now() - matcherStartTime;
+            log(`Matcher "${matcherName}": completed in ${matcherDuration}ms`);
+            if (matcherDuration > 1000) {
+                vscode.window.showWarningMessage(
+                    `Related Sources: Matcher "${matcherName}" took ${(matcherDuration / 1000).toFixed(1)}s ` +
+                    `and findFiles duration ${(findFilesDuration / 1000).toFixed(1)}s. ` +
+                    `Consider optimizing: sourceRegexp="${matcher.sourceRegexp}", targetPath="${matcher.targetPath}", target="${target}"`
+                );
+            }
+        }
+
+        return candidateUris;
+    }
+
+    /**
+     * Gets an array of all transitively related file URIs for a given file URI.
+     * This finds all files related to the input file, then finds files related to those,
+     * and continues until no new files are discovered.
+     * 
+     * @param {vscode.Uri} fileUri - The file URI to find transitively related files for
+     * @returns {Promise<vscode.Uri[]>} - Array of unique related file URIs (deduplicated by fsPath)
+     */
+    async getTransitiveRelatedFiles(fileUri) {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(fileUri) || (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0]);
+        if (!workspaceFolder) {
+            return [];
+        }
+
+        const workspaceRoot = workspaceFolder.uri.fsPath;
+        
+        // Cache for readDirectory calls to avoid repeated filesystem access
+        const directoryCache = new Map();
+        
+        // Track processed files by their relative path to avoid duplicates and cycles
+        const processedPaths = new Set();
+        // Map from relative path to URI for the final result
+        const resultMap = new Map();
+        // Queue of URIs to process
+        const queue = [fileUri];
+
+        while (queue.length > 0) {
+            const currentUri = queue.shift();
+            const currentRelPath = path.relative(workspaceRoot, currentUri.fsPath).replace(/\\/g, '/');
+
+            // Skip if already processed
+            if (processedPaths.has(currentRelPath)) {
+                continue;
+            }
+            processedPaths.add(currentRelPath);
+            resultMap.set(currentRelPath, currentUri);
+
+            // Get directly related files, passing the cache
+            const relatedUris = await this.getRelatedFiles(currentUri, directoryCache);
+
+            for (const relatedUri of relatedUris) {
+                const relatedRelPath = path.relative(workspaceRoot, relatedUri.fsPath).replace(/\\/g, '/');
+                // Add to queue if not already processed
+                if (!processedPaths.has(relatedRelPath)) {
+                    queue.push(relatedUri);
+                }
+            }
+        }
+
+        // Return all unique URIs (excluding the original file if desired, but including it for consistency)
+        return Array.from(resultMap.values());
+    }
+
     async completePrevNextHelper(uri) {
         const maxColumn = vscode.window.visibleTextEditors.reduce((max, editor) => Math.max(max, editor.viewColumn), 1);
         const currentColumn = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : 1;
@@ -257,11 +332,11 @@ class RelatedSources {
         let newColumn = currentColumn;
         switch (openColumnSetting) {
         case 'current':
-            newColumn = currentColumn;
+            newColumn = -1;
             break;
 
         case 'beside':
-            newColumn = currentColumn + 1;
+            newColumn = -2;
             break;
 
         default:
