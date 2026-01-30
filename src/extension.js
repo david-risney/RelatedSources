@@ -121,6 +121,10 @@ class RelatedSources {
         const doc = editor.document;
         const fileUri = doc.uri;
 
+        return this.getPrevNextInfoHelperForUri(fileUri);
+    }
+
+    async getPrevNextInfoHelperForUri(fileUri) {
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(fileUri) || (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0]);
         if (!workspaceFolder) {
             vscode.window.showInformationMessage('Related Sources: No workspace folder found');
@@ -138,10 +142,8 @@ class RelatedSources {
         for (const matcher of matchers) {
             const matcherStartTime = Date.now();
             const matcherName = matcher?.name || 'unnamed';
-            log(`Processing matcher "${matcherName}": sourceRegexp=${matcher?.sourceRegexp}, targetPath=${matcher?.targetPath}`);
 
             if (!matcher || !matcher.sourceRegexp || !matcher.targetPath) {
-                log(`Skipping matcher "${matcherName}": missing required fields`);
                 continue;
             }
             let target = matcher.targetPath;
@@ -149,16 +151,12 @@ class RelatedSources {
             try {
                 const regex = this.getCompiledRegex(matcher.sourceRegexp);
                 if (!regex) {
-                    log(`Skipping matcher "${matcherName}": invalid regex`);
                     continue;
                 }
                 const m = relPath.match(regex);
                 if (!m) {
-                    log(`Matcher "${matcherName}": no match for path "${relPath}"`);
                     continue;
                 }
-
-                log(`Matcher "${matcherName}": matched path "${relPath}"`);
 
                 // Replace placeholders ${name} and ${1}
                 target = target.replace(/\$\{([^}]+)\}/g, (full, name) => {
@@ -173,7 +171,6 @@ class RelatedSources {
                 // Normalize target to forward slashes and remove leading slash
                 target = target.replace(/\\/g, '/').replace(/^[\/]+/, '');
 
-                log(`Matcher "${matcherName}": searching for files matching "${target}"`);
                 const findFilesStartTime = Date.now();
                 const found = await findFilesWithGlob(workspaceFolder, target);
                 findFilesDuration = Date.now() - findFilesStartTime;

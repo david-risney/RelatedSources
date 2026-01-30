@@ -91,6 +91,21 @@
               "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
               "targetPath": "out/*/gen/${path}.*",
               "name": "Generated target files"
+            },
+            {
+              "sourceRegexp": "^(?<path>.*)_(base|impl|delegate|observer|proxy)\\.[^.]*$",
+              "targetPath": "${path}.*",
+              "name": "Suffix target files"
+            },
+            {
+              "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
+              "targetPath": "${path}_base.*",
+              "name": "Suffix base source files"
+            },
+            {
+              "sourceRegexp": "^(?<path>.*)\\.[^.]*$",
+              "targetPath": "${path}_impl.*",
+              "name": "Suffix impl source files"
             }
           ],
           "description": "Related source file patterns"
