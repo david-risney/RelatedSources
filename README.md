@@ -17,6 +17,10 @@ This Visual Studio Code extension finds files related to the currently active ed
 - Works with named capture groups and numbered capture groups when substituting into target paths.
 - Default matchers setup for chromium source projects.
 
+## Changelog
+
+- Extracted logging to a dedicated `src/logger.js` utility module.
+
 ## Configuration
 
 The extension uses the `relatedsources.matchers` setting (an array) to discover related files. Each matcher is an object with the following properties:
@@ -24,6 +28,10 @@ The extension uses the `relatedsources.matchers` setting (an array) to discover 
 - `sourceRegexp` (string) — a regular expression to match the current file's path (relative to the workspace root). Named capture groups (`(?<name>...)`) or numbered capture groups can be used.
 - `targetPath` (string) — a glob-style target pattern. Use `${name}` to substitute named capture groups or `${1}` for numbered groups. The pattern is interpreted relative to the workspace root.
 - `name` (string) — a friendly name for the matcher.
+
+The extension also supports:
+
+- `relatedsources.slowMatcherThresholdMs` (number, default `1000`) — time in milliseconds a matcher can take before a warning notification is shown. Set to `0` to disable slow-matcher warnings.
 
 Example settings (to add to your workspace or user settings):
 

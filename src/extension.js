@@ -1,11 +1,10 @@
 const vscode = require('vscode');
 const path = require('path');
 const { findFilesWithGlob } = require('./findFilesWithGlob');
+const { logger } = require('./logger');
 let relatedSources = null;
 
-const log = (...args) => {
-    console.log('[RelatedSources] ', ...args);
-}
+const log = (...args) => logger.log(...args);
 
 function activate(context) {
     log('extension is now active!');
@@ -209,6 +208,7 @@ class RelatedSources {
 
         const config = vscode.workspace.getConfiguration('relatedsources');
         const matchers = config.matchers || [];
+        const slowMatcherThresholdMs = config.get('slowMatcherThresholdMs', 1000);
 
         let candidateUris = [];
 
@@ -259,7 +259,7 @@ class RelatedSources {
 
             const matcherDuration = Date.now() - matcherStartTime;
             log(`Matcher "${matcherName}": completed in ${matcherDuration}ms`);
-            if (matcherDuration > 1000) {
+            if (slowMatcherThresholdMs > 0 && matcherDuration > slowMatcherThresholdMs) {
                 vscode.window.showWarningMessage(
                     `Related Sources: Matcher "${matcherName}" took ${(matcherDuration / 1000).toFixed(1)}s ` +
                     `and findFiles duration ${(findFilesDuration / 1000).toFixed(1)}s. ` +
