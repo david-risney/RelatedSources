@@ -120,6 +120,12 @@
           ],
           "description": "Related source file patterns"
         },
+        "relatedsources.slowMatcherThresholdMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "description": "Time in milliseconds a matcher can take before a warning is shown. Set to 0 to disable warnings."
+        },
         "relatedsources.openColumn": {
           "type": "string",
           "enum": [

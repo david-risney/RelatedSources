@@ -29,6 +29,10 @@ The extension uses the `relatedsources.matchers` setting (an array) to discover 
 - `targetPath` (string) — a glob-style target pattern. Use `${name}` to substitute named capture groups or `${1}` for numbered groups. The pattern is interpreted relative to the workspace root.
 - `name` (string) — a friendly name for the matcher.
 
+The extension also supports:
+
+- `relatedsources.slowMatcherThresholdMs` (number, default `1000`) — time in milliseconds a matcher can take before a warning notification is shown. Set to `0` to disable slow-matcher warnings.
+
 Example settings (to add to your workspace or user settings):
 
 ```json
