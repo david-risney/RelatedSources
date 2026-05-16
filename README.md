@@ -17,6 +17,10 @@ This Visual Studio Code extension finds files related to the currently active ed
 - Works with named capture groups and numbered capture groups when substituting into target paths.
 - Default matchers setup for chromium source projects.
 
+## Changelog
+
+- Extracted logging to a dedicated `src/logger.js` utility module.
+
 ## Configuration
 
 The extension uses the `relatedsources.matchers` setting (an array) to discover related files. Each matcher is an object with the following properties:

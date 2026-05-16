@@ -1,11 +1,10 @@
 const vscode = require('vscode');
 const path = require('path');
 const { findFilesWithGlob } = require('./findFilesWithGlob');
+const { logger } = require('./logger');
 let relatedSources = null;
 
-const log = (...args) => {
-    console.log('[RelatedSources] ', ...args);
-}
+const log = (...args) => logger.log(...args);
 
 function activate(context) {
     log('extension is now active!');
